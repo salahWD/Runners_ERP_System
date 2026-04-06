@@ -92,7 +92,7 @@ export const AddressSettingsDialog = ({ open, onOpenChange }: AddressSettingsDia
         <DialogHeader>
           <DialogTitle>Manage Address Areas</DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleAdd} className="flex gap-2 mb-4">
           <div className="flex-1">
             <Label htmlFor="area-name" className="sr-only">Area Name</Label>
@@ -118,8 +118,8 @@ export const AddressSettingsDialog = ({ open, onOpenChange }: AddressSettingsDia
               </TableRow>
             </TableHeader>
             <TableBody>
-              {areas?.map((area) => (
-                <TableRow key={area.id}>
+              {areas?.map((area, index) => (
+                <TableRow key={index}>
                   <TableCell>{area.name}</TableCell>
                   <TableCell>
                     <Button

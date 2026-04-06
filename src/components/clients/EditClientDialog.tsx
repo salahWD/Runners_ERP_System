@@ -21,7 +21,7 @@ const clientSchema = z.object({
   phone: z.string().max(20),
   address: z.string().max(255),
   location_link: z.string().max(500).optional(),
-  default_currency: z.enum(['USD', 'LBP']),
+  // default_currency: z.enum(['USD', 'LBP']),
   fee_rule: z.enum(['ADD_ON', 'DEDUCT', 'INCLUDED']),
 });
 
@@ -41,7 +41,7 @@ const EditClientDialog = ({ open, onOpenChange, client }: EditClientDialogProps)
     phone: '',
     address: '',
     location_link: '',
-    default_currency: 'USD' as 'USD' | 'LBP',
+    // default_currency: 'USD' as 'USD' | 'LBP',
     fee_rule: 'ADD_ON' as 'ADD_ON' | 'DEDUCT' | 'INCLUDED',
   });
 
@@ -54,7 +54,7 @@ const EditClientDialog = ({ open, onOpenChange, client }: EditClientDialogProps)
         phone: client.phone || '',
         address: client.address || '',
         location_link: client.location_link || '',
-        default_currency: client.default_currency || 'USD',
+        // default_currency: client.default_currency || 'USD',
         fee_rule: client.client_rules?.[0]?.fee_rule || 'ADD_ON',
       });
     }
@@ -71,7 +71,7 @@ const EditClientDialog = ({ open, onOpenChange, client }: EditClientDialogProps)
           phone: data.phone,
           address: data.address,
           location_link: data.location_link,
-          default_currency: data.default_currency,
+          // default_currency: data.default_currency,
         })
         .eq('id', client.id);
 
@@ -199,7 +199,7 @@ const EditClientDialog = ({ open, onOpenChange, client }: EditClientDialogProps)
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="currency">Default Currency *</Label>
               <Select
@@ -234,7 +234,7 @@ const EditClientDialog = ({ open, onOpenChange, client }: EditClientDialogProps)
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          </div> */}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

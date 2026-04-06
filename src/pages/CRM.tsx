@@ -42,7 +42,7 @@ const CRM = () => {
       setActiveTab('statements');
     }
   }, [tabFromUrl]);
-  
+
   const { data: clients, isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
@@ -62,7 +62,7 @@ const CRM = () => {
         .from('client_transactions')
         .select('client_id, type, amount_usd, amount_lbp');
       if (error) throw error;
-      
+
       const balances = new Map<string, { usd: number; lbp: number }>();
       data?.forEach((tx: any) => {
         const current = balances.get(tx.client_id) || { usd: 0, lbp: 0 };
@@ -82,7 +82,7 @@ const CRM = () => {
         .from('clients')
         .delete()
         .eq('id', clientId);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -112,10 +112,9 @@ Contact: ${client.contact_name || 'N/A'}
 Phone: ${client.phone || 'N/A'}
 Address: ${client.address || 'N/A'}
 ${client.location_link ? `Location: ${client.location_link}` : ''}
-Currency: ${client.default_currency}
 Fee Rule: ${client.client_rules?.[0]?.fee_rule || 'N/A'}
     `.trim();
-    
+
     navigator.clipboard.writeText(info);
     toast({
       title: "Copied!",
@@ -230,22 +229,22 @@ Fee Rule: ${client.client_rules?.[0]?.fee_rule || 'N/A'}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-1">
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="ghost"
                                   size="sm"
                                   onClick={() => copyClientInfo(client)}
                                 >
                                   <Copy className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="ghost"
                                   size="sm"
                                   onClick={() => handleEdit(client)}
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </Button>
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="ghost"
                                   size="sm"
                                   onClick={() => handleDelete(client.id)}
                                 >

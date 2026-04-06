@@ -41,7 +41,7 @@ const AddExpenseDialog = ({ open, onOpenChange, date }: AddExpenseDialogProps) =
     mutationFn: async () => {
       const amountUsd = currency === 'USD' ? Number(amount) : 0;
       const amountLbp = currency === 'LBP' ? Number(amount) : 0;
-      
+
       const expenseData = {
         date: expenseDate,
         category_id: categoryId,

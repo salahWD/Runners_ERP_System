@@ -41,6 +41,8 @@ interface Order {
   client_net_usd?: number;
   prepaid_by_runners?: boolean;
   prepaid_by_company?: boolean;
+  company_paid_for_order?: boolean;
+  driver_paid_for_client?: boolean;
   driver_remit_status?: string;
   client_fee_rule?: "ADD_ON" | "DEDUCT" | "INCLUDED";
   client_settlement_status?: string;
@@ -56,6 +58,9 @@ interface Order {
 }
 
 type FeePayer = 'customer' | 'client' | 'split';
+type statusTypes = "New" | "Assigned" | "PickedUp" | "Delivered" | "Returned" | "Cancelled" | "DriverCollected" | "CustomerCollected" | "PaidDueByDriver";
+
+const deliveryStatuses = ['Delivered', 'DriverCollected', 'CustomerCollected', 'PaidDueByDriver'];
 
 interface EditOrderDialogProps {
   order: Order;
@@ -83,18 +88,20 @@ const parseSplitAmounts = (notes?: string): { usd: string; lbp: string } => {
 export default function EditOrderDialog({ order, open, onOpenChange }: EditOrderDialogProps) {
   const queryClient = useQueryClient();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  
+
   const splitAmounts = parseSplitAmounts(order.notes);
-  
+
   const [formData, setFormData] = useState({
     voucher_no: order.voucher_no || "",
     address: order.address,
     order_amount_usd: order.order_amount_usd.toString(),
     delivery_fee_usd: order.delivery_fee_usd.toString(),
+    order_amount_lbp: order.order_amount_lbp.toString(),
+    delivery_fee_lbp: order.delivery_fee_lbp.toString(),
     amount_due_to_client_usd: order.amount_due_to_client_usd?.toString() || "0",
     third_party_fee_usd: (order as any).third_party_fee_usd?.toString() || "0",
     notes: order.notes || "",
-    status: order.status as "New" | "Assigned" | "PickedUp" | "Delivered" | "Returned" | "Cancelled",
+    status: order.status as statusTypes,
     driver_id: order.driver_id || "",
     prepaid_by_runners: order.prepaid_by_runners || false,
     prepaid_by_company: order.prepaid_by_company || false,
@@ -142,12 +149,13 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
   const updateOrderMutation = useMutation({
     mutationFn: async () => {
       const previousStatus = order.status;
-      
+
       // Validate: Cannot mark as Delivered without a driver
-      if (formData.status === 'Delivered' && !formData.driver_id) {
+      if (
+        deliveryStatuses.includes(formData.status) && !formData.driver_id) {
         throw new Error('Cannot mark order as Delivered without assigning a driver');
       }
-      
+
       // For ecom orders, update customer info if we have a customer_id
       if (order.order_type === 'ecom' && order.customer_id && formData.customer_phone) {
         const { error: customerError } = await supabase
@@ -158,19 +166,19 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
             address: formData.address || null,
           })
           .eq("id", order.customer_id);
-        
+
         if (customerError) {
           console.error('Error updating customer:', customerError);
           throw new Error('Failed to update customer information');
         }
       }
-      
+
       // Prepare update data
       const orderAmountUsd = parseFloat(formData.order_amount_usd) || 0;
       const deliveryFeeUsd = parseFloat(formData.delivery_fee_usd) || 0;
       const thirdPartyFeeUsd = parseFloat(formData.third_party_fee_usd) || 0;
       const clientNetUsd = orderAmountUsd - deliveryFeeUsd;
-      
+
       const updateData: any = {
         voucher_no: formData.voucher_no || null,
         address: formData.address,
@@ -190,10 +198,10 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
       if (order.order_type === 'instant') {
         let clientFeeRule: "ADD_ON" | "DEDUCT" | "INCLUDED" = "ADD_ON";
         let notes = formData.notes || "";
-        
+
         // Remove old fee payer info from notes
         notes = notes.replace(/\s*\|\s*Fee: Client pays/g, '').replace(/\s*\|\s*Fee split: Client \$[\d.]+ \/ LL\d+/g, '').trim();
-        
+
         if (formData.fee_payer === 'client') {
           clientFeeRule = "DEDUCT";
           notes = notes ? `${notes} | Fee: Client pays` : "Fee: Client pays";
@@ -204,13 +212,13 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
           const splitInfo = `Fee split: Client $${clientUsd} / LL${clientLbp}`;
           notes = notes ? `${notes} | ${splitInfo}` : splitInfo;
         }
-        
+
         updateData.client_fee_rule = clientFeeRule;
         updateData.notes = notes || null;
       }
 
       // Set delivered_at timestamp when status changes to Delivered
-      if (previousStatus !== 'Delivered' && formData.status === 'Delivered') {
+      if (!deliveryStatuses.includes(previousStatus) && deliveryStatuses.includes(formData.status)) {
         updateData.delivered_at = new Date().toISOString();
       }
 
@@ -222,16 +230,62 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
       if (error) throw error;
 
       // If status changed to Delivered, process the accounting
-      if (previousStatus !== 'Delivered' && formData.status === 'Delivered') {
+      if (!deliveryStatuses.includes(previousStatus) && deliveryStatuses.includes(formData.status)) {
+
         console.log('Order marked as delivered, processing accounting...');
+
         const { error: functionError } = await supabase.functions.invoke('process-order-delivery', {
           body: { orderId: order.id }
         });
-        
+
         if (functionError) {
           console.error('Error processing delivery:', functionError);
           throw new Error('Order updated but accounting failed: ' + functionError.message);
         }
+
+        if (!order?.company_paid_for_order) {
+          const { error: walletError } = await (supabase.rpc as any)('update_driver_wallet_atomic', {
+            p_driver_id: updateData.driver_id,
+            p_amount_usd: order?.driver_paid_for_client ? (orderAmountUsd * -1) : orderAmountUsd + deliveryFeeUsd,
+            p_amount_lbp: 0,
+          });
+
+          if (walletError) {
+            console.error('Error Adding to Driver Wallet:', walletError);
+            throw new Error('Order updated but accounting failed: ' + walletError.message);
+          }
+        }
+
+      }
+
+      console.log(formData.status)
+      console.log(previousStatus)
+      console.log(previousStatus !== formData.status)
+      console.log({
+        order_id: order.id,
+        type: formData.status === 'Assigned'
+          ? 'ASSIGNED'
+          : formData.status === 'PickedUp'
+            ? 'PICKED_UP'
+            : formData.status === 'DriverCollected'
+              ? 'DELIVERED'
+              : 'ORDER_CREATED', // fallback if needed
+        title: `Status changed to ${formData.status}`,
+        description: `Order moved from ${previousStatus} to ${formData.status}`,
+      })
+      if (previousStatus !== formData.status) {
+        await supabase.from('order_timeline_events').insert({
+          order_id: order.id,
+          type: formData.status === 'Assigned'
+            ? 'ASSIGNED'
+            : formData.status === 'PickedUp'
+              ? 'PICKED_UP'
+              : formData.status === 'DriverCollected'
+                ? 'DELIVERED'
+                : 'ORDER_CREATED', // fallback if needed
+          title: `Status changed to ${formData.status}`,
+          description: `Order moved from ${previousStatus} to ${formData.status}`,
+        });
       }
     },
     onSuccess: () => {
@@ -260,7 +314,7 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
             .from('driver_transactions')
             .delete()
             .eq('order_ref', order.order_id);
-          
+
           if (driverTxError) {
             console.error('Error deleting driver transaction:', driverTxError);
             throw new Error('Failed to reverse driver transaction');
@@ -297,7 +351,7 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
             .from('client_transactions')
             .delete()
             .eq('order_ref', order.order_id);
-          
+
           if (clientTxError) {
             console.error('Error deleting client transaction:', clientTxError);
             throw new Error('Failed to reverse client transaction');
@@ -309,7 +363,7 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
           .from('accounting_entries')
           .delete()
           .eq('order_ref', order.order_id);
-        
+
         if (accountingError) {
           console.error('Error deleting accounting entry:', accountingError);
           throw new Error('Failed to reverse accounting entry');
@@ -379,16 +433,16 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Phone</Label>
-                          <Input 
-                            value={formData.customer_phone} 
+                          <Input
+                            value={formData.customer_phone}
                             onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
                             placeholder="Customer phone..."
                           />
                         </div>
                         <div className="space-y-2">
                           <Label>Name</Label>
-                          <Input 
-                            value={formData.customer_name} 
+                          <Input
+                            value={formData.customer_name}
                             onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
                             placeholder="Customer name..."
                           />
@@ -416,8 +470,8 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                             const total = parseFloat(e.target.value) || 0;
                             const deliveryFee = parseFloat(formData.delivery_fee_usd) || 0;
                             const orderAmount = total - deliveryFee;
-                            setFormData({ 
-                              ...formData, 
+                            setFormData({
+                              ...formData,
                               order_amount_usd: orderAmount.toString(),
                               amount_due_to_client_usd: orderAmount.toString()
                             });
@@ -434,8 +488,8 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                             const deliveryFee = parseFloat(e.target.value) || 0;
                             const total = parseFloat(formData.order_amount_usd || "0") + parseFloat(formData.delivery_fee_usd || "0");
                             const orderAmount = total - deliveryFee;
-                            setFormData({ 
-                              ...formData, 
+                            setFormData({
+                              ...formData,
                               delivery_fee_usd: e.target.value,
                               order_amount_usd: orderAmount.toString(),
                               amount_due_to_client_usd: orderAmount.toString()
@@ -490,7 +544,7 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Order Status</Label>
-                  <Select value={formData.status} onValueChange={(value: "New" | "Assigned" | "PickedUp" | "Delivered" | "Returned" | "Cancelled") => setFormData({ ...formData, status: value })}>
+                  <Select value={formData.status} onValueChange={(value: statusTypes) => setFormData({ ...formData, status: value })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -498,7 +552,10 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                       <SelectItem value="New">New</SelectItem>
                       <SelectItem value="Assigned">Assigned</SelectItem>
                       <SelectItem value="PickedUp">Picked Up</SelectItem>
-                      <SelectItem value="Delivered">Delivered</SelectItem>
+                      {/* <SelectItem value="Delivered">Delivered</SelectItem> */}
+                      <SelectItem value="DriverCollected">Delivered - Driver Collected</SelectItem>
+                      {/* <SelectItem value="CustomerCollected">Delivered - Customer Collected</SelectItem> */}
+                      {/* <SelectItem value="PaidDueByDriver">Delivered - Paid Due By Driver</SelectItem> */}
                       <SelectItem value="Returned">Returned</SelectItem>
                       <SelectItem value="Cancelled">Cancelled</SelectItem>
                     </SelectContent>
@@ -507,8 +564,8 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
 
                 <div className="space-y-2">
                   <Label>Assign Driver</Label>
-                  <Select 
-                    value={formData.driver_id || "unassigned"} 
+                  <Select
+                    value={formData.driver_id || "unassigned"}
                     onValueChange={(value) => setFormData({ ...formData, driver_id: value === "unassigned" ? null : value })}
                   >
                     <SelectTrigger>
@@ -543,10 +600,10 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                     <Checkbox
                       id="prepaid"
                       checked={formData.prepaid_by_company}
-                      onCheckedChange={(checked) => setFormData({ 
-                        ...formData, 
+                      onCheckedChange={(checked) => setFormData({
+                        ...formData,
                         prepaid_by_company: checked as boolean,
-                        prepaid_by_runners: checked as boolean 
+                        prepaid_by_runners: checked as boolean
                       })}
                     />
                     <Label htmlFor="prepaid">Cash-Based (Prepaid to Client)</Label>
@@ -557,11 +614,11 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Fee Payer</Label>
-                      <Select 
-                        value={formData.fee_payer} 
+                      <Select
+                        value={formData.fee_payer}
                         onValueChange={(value: FeePayer) => {
-                          setFormData({ 
-                            ...formData, 
+                          setFormData({
+                            ...formData,
                             fee_payer: value,
                             client_fee_share_usd: value !== 'split' ? '' : formData.client_fee_share_usd,
                             client_fee_share_lbp: value !== 'split' ? '' : formData.client_fee_share_lbp,
@@ -578,7 +635,7 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                         </SelectContent>
                       </Select>
                     </div>
-                    
+
                     {formData.fee_payer === 'split' && (
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">

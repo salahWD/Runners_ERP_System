@@ -81,10 +81,10 @@ function EcomOrderRow({
       setNewRows((prevRows) => prevRows.map((r) =>
         r.id === row.id
           ? {
-              ...r,
-              customer_name: matchingCustomer.name || r.customer_name,
-              customer_address: matchingCustomer.address || r.customer_address
-            }
+            ...r,
+            customer_name: matchingCustomer.name || r.customer_name,
+            customer_address: matchingCustomer.address || r.customer_address
+          }
           : r
       ));
     }
@@ -434,8 +434,8 @@ export function EcomOrderForm() {
       const amountDue = parseFloat(rowData.amount_due_to_client_usd) || 0;
 
       const thirdPartyFee = parseFloat(rowData.third_party_fee_usd) || 0;
-      const clientNetUsd = rowData.fulfillment === "ThirdParty" 
-        ? orderAmount - thirdPartyFee 
+      const clientNetUsd = rowData.fulfillment === "ThirdParty"
+        ? orderAmount - thirdPartyFee
         : amountDue;
 
       const { error } = await supabase.from("orders").insert({
@@ -452,7 +452,7 @@ export function EcomOrderForm() {
         delivery_fee_usd: deliveryFee,
         amount_due_to_client_usd: amountDue,
         client_net_usd: clientNetUsd,
-        client_fee_rule: client.client_rules?.[0]?.fee_rule || "ADD_ON",
+        client_fee_rule: /* client.client_rules?.[0]?.fee_rule || */ "ADD_ON",
         prepaid_by_runners: rowData.prepaid_by_company,
         prepaid_by_company: false,
         status: "New",
@@ -523,7 +523,7 @@ export function EcomOrderForm() {
     }
 
     setIsBulkSaving(false);
-    
+
     if (successCount > 0 && errorCount === 0) {
       toast.success(`${successCount} order(s) saved successfully!`);
     } else if (successCount > 0 && errorCount > 0) {
@@ -542,9 +542,9 @@ export function EcomOrderForm() {
             <Plus className="h-4 w-4 mr-1" />
             Add Row
           </Button>
-          <Button 
-            onClick={saveAllOrders} 
-            size="sm" 
+          <Button
+            onClick={saveAllOrders}
+            size="sm"
             disabled={validRowCount === 0 || isBulkSaving}
           >
             {isBulkSaving ? 'Saving...' : `Save All (${validRowCount})`}

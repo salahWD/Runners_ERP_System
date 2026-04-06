@@ -5,11 +5,15 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ArrowUpCircle, ArrowDownCircle, Receipt, HandCoins, Truck } from 'lucide-react';
 
+import { DateRange } from "react-day-picker";
+
 interface TransactionHistoryTableProps {
-  date: string;
+  date: DateRange;
+  type: string | null;
+  search: string | null
 }
 
-export default function TransactionHistoryTable({ date }: TransactionHistoryTableProps) {
+export default function TransactionHistoryTable({ date, type = null, search = null }: TransactionHistoryTableProps) {
   // Get driver transactions for the date
   const { data: driverTransactions } = useQuery({
     queryKey: ['driver-transactions-daily', date],
@@ -17,8 +21,23 @@ export default function TransactionHistoryTable({ date }: TransactionHistoryTabl
       const { data, error } = await supabase
         .from('driver_transactions')
         .select('*, drivers(name)')
-        .gte('ts', date)
-        .lte('ts', date + 'T23:59:59')
+        .gte('ts', date.from.toISOString().split('T')[0])
+        .lte('ts', date.to.toISOString().split('T')[0] + 'T23:59:59')
+        .order('ts', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Get client transactions for the date
+  const { data: clientTransactions } = useQuery({
+    queryKey: ['client-transactions-daily', date],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('client_transactions')
+        .select('*, clients(name)')
+        .gte('ts', date.from.toISOString().split('T')[0])
+        .lte('ts', date.to.toISOString().split('T')[0] + 'T23:59:59')
         .order('ts', { ascending: false });
       if (error) throw error;
       return data;
@@ -47,7 +66,8 @@ export default function TransactionHistoryTable({ date }: TransactionHistoryTabl
       const { data, error } = await supabase
         .from('daily_expenses')
         .select('*, expense_categories(name)')
-        .eq('date', date)
+        .gte('date', date.from.toISOString().split('T')[0])
+        .lte('date', date.to.toISOString().split('T')[0])
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
@@ -61,9 +81,19 @@ export default function TransactionHistoryTable({ date }: TransactionHistoryTabl
       time: t.ts,
       type: t.type === 'Credit' ? 'Driver Credit' : 'Driver Debit',
       description: `${t.drivers?.name || 'Driver'}: ${t.note || 'Transaction'}`,
-      amountUSD: t.type === 'Credit' ? -Number(t.amount_usd || 0) : Number(t.amount_usd || 0),
-      amountLBP: t.type === 'Credit' ? -Number(t.amount_lbp || 0) : Number(t.amount_lbp || 0),
+      amountUSD: t.type === 'Credit' ? Number(t.amount_usd || 0) : -Number(t.amount_usd || 0),
+      amountLBP: t.type === 'Credit' ? Number(t.amount_lbp || 0) : -Number(t.amount_lbp || 0),
       category: 'driver',
+      orderRef: t.order_ref,
+    })) || []),
+    ...(clientTransactions?.map(t => ({
+      id: t.id,
+      time: t.ts,
+      type: t.type === 'Credit' ? 'Client Credit' : 'Client Debit',
+      description: `${t.clients?.name || 'Client'}: ${t.note || 'Transaction'}`,
+      amountUSD: t.type === 'Credit' ? Number(t.amount_usd || 0) : -Number(t.amount_usd || 0),
+      amountLBP: t.type === 'Credit' ? Number(t.amount_lbp || 0) : -Number(t.amount_lbp || 0),
+      category: 'client',
       orderRef: t.order_ref,
     })) || []),
     ...(accountingEntries?.map(t => ({
@@ -86,8 +116,16 @@ export default function TransactionHistoryTable({ date }: TransactionHistoryTabl
       category: 'expense',
       orderRef: null,
     })) || []),
-  ].sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
-
+  ].filter(item => {
+    if (type && type !== 'All' && item.category !== type) {
+      return false;
+    }
+    if (search && !item.description.includes(search)) {
+      return false;
+    }
+    return true;
+  }).sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
+  console.log(allTransactions)
   const getIcon = (category: string, amountUSD: number) => {
     switch (category) {
       case 'driver':
@@ -126,7 +164,7 @@ export default function TransactionHistoryTable({ date }: TransactionHistoryTabl
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Time</TableHead>
+          <TableHead>Time-Date</TableHead>
           <TableHead>Type</TableHead>
           <TableHead>Description</TableHead>
           <TableHead>Reference</TableHead>
@@ -138,7 +176,7 @@ export default function TransactionHistoryTable({ date }: TransactionHistoryTabl
         {allTransactions.map((tx) => (
           <TableRow key={tx.id}>
             <TableCell className="text-sm text-muted-foreground">
-              {tx.time ? format(new Date(tx.time), 'HH:mm:ss') : '-'}
+              {tx.time ? format(new Date(tx.time), 'MMM dd - HH:mm:ss') : '-'}
             </TableCell>
             <TableCell>
               <Badge variant={getBadgeVariant(tx.category) as any} className="flex items-center gap-1 w-fit">

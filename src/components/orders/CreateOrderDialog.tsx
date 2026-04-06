@@ -128,7 +128,7 @@ const CreateOrderDialog = ({ open, onOpenChange, orderType }: CreateOrderDialogP
       if (clientError) throw clientError;
 
       const clientRule = clientData.client_rules?.[0];
-      
+
       // Generate OrderID
       const orderIdPrefix = clientData.type === 'Ecom' ? 'EC' : 'ORD';
       const orderId = `${orderIdPrefix}-${Date.now()}`;
@@ -139,9 +139,9 @@ const CreateOrderDialog = ({ open, onOpenChange, orderType }: CreateOrderDialogP
 
       // Calculate amount due to client based on fee rule
       let amountDueUSD = data.order_amount_usd;
-      if (clientRule?.fee_rule === 'DEDUCT') {
-        amountDueUSD = data.order_amount_usd - deliveryFeeUSD;
-      }
+      // if (clientRule?.fee_rule === 'DEDUCT') {
+      //   amountDueUSD = data.order_amount_usd - deliveryFeeUSD;
+      // }
 
       const orderData = {
         order_id: orderId,
@@ -156,7 +156,8 @@ const CreateOrderDialog = ({ open, onOpenChange, orderType }: CreateOrderDialogP
         delivery_fee_usd: deliveryFeeUSD,
         delivery_fee_lbp: deliveryFeeLBP,
         amount_due_to_client_usd: amountDueUSD,
-        client_fee_rule: clientRule?.fee_rule || 'ADD_ON',
+        client_fee_rule: 'ADD_ON' as 'ADD_ON' | 'DEDUCT' | 'INCLUDED',
+        // client_fee_rule: clientRule?.fee_rule || 'ADD_ON',
         fulfillment: data.fulfillment,
         driver_id: data.fulfillment === 'InHouse' ? (data.driver_id || null) : null,
         third_party_id: data.fulfillment === 'ThirdParty' ? (data.third_party_id || null) : null,

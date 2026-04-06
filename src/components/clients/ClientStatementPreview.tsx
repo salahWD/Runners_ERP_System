@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Copy, X } from 'lucide-react';
+import { Copy, FileText, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -31,6 +31,7 @@ interface ClientStatementPreviewProps {
   clientName: string;
   dateFrom: string;
   dateTo: string;
+  issueStatementMutation: any;
   totals: {
     totalOrders: number;
     totalOrderAmountUsd: number;
@@ -49,6 +50,7 @@ export function ClientStatementPreview({
   clientName,
   dateFrom,
   dateTo,
+  issueStatementMutation,
   totals,
 }: ClientStatementPreviewProps) {
   const previewRef = useRef<HTMLDivElement>(null);
@@ -66,8 +68,8 @@ export function ClientStatementPreview({
     if (order.order_type === 'instant' || order.order_type === 'errand') {
       if (order.driver_paid_for_client) {
         return {
-          usd: Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0),
-          lbp: Number(order.order_amount_lbp || 0) + Number(order.delivery_fee_lbp || 0),
+          usd: -1 * (Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0)),
+          lbp: -1 * (Number(order.order_amount_lbp || 0) + Number(order.delivery_fee_lbp || 0)),
         };
       }
       return {
@@ -102,7 +104,7 @@ export function ClientStatementPreview({
         const orderLbp = Number(order.order_amount_lbp || 0);
         const feeUsd = Number(order.delivery_fee_usd || 0);
         const feeLbp = Number(order.delivery_fee_lbp || 0);
-        
+
         text += `\n${idx + 1}. *${order.order_id}*\n`;
         text += `   📅 ${format(new Date(order.created_at), 'MMM dd, yyyy')}\n`;
         text += `   📍 ${order.address}\n`;
@@ -185,7 +187,7 @@ export function ClientStatementPreview({
                     const orderLbp = Number(order.order_amount_lbp || 0);
                     const feeUsd = Number(order.delivery_fee_usd || 0);
                     const feeLbp = Number(order.delivery_fee_lbp || 0);
-                    
+
                     return (
                       <TableRow key={order.id} className="text-sm">
                         <TableCell>{format(new Date(order.created_at), 'MMM dd')}</TableCell>
@@ -283,6 +285,10 @@ export function ClientStatementPreview({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             <X className="mr-2 h-4 w-4" />
             Close
+          </Button>
+          <Button onClick={() => { issueStatementMutation.mutate(); onOpenChange(false); }} disabled={issueStatementMutation.isPending}>
+            <FileText className="mr-1.5 h-3.5 w-3.5" />
+            Issue Statment
           </Button>
           <Button onClick={copyToClipboard}>
             <Copy className="mr-2 h-4 w-4" />

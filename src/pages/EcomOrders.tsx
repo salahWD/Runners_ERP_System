@@ -102,7 +102,7 @@ const EcomOrders = () => {
 
   const filteredOrders = useMemo(() => {
     if (!orders) return orders;
-    
+
     return orders.filter((order) => {
       const matchesSearch = !searchQuery.trim() || (
         order.clients?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -113,12 +113,12 @@ const EcomOrders = () => {
       );
 
       const matchesStatus = statusFilter === "all" || order.status === statusFilter;
-      const matchesPayment = paymentFilter === "all" || 
+      const matchesPayment = paymentFilter === "all" ||
         (paymentFilter === "cash" && order.prepaid_by_company) ||
         (paymentFilter === "cash_pending" && order.prepaid_by_runners && !order.prepaid_by_company) ||
         (paymentFilter === "statement" && !order.prepaid_by_company && !order.prepaid_by_runners);
       const matchesFulfillment = fulfillmentFilter === "all" || order.fulfillment === fulfillmentFilter;
-      
+
       // Settlement filter
       let matchesSettlement = true;
       if (settlementFilter === "client_unpaid") {
@@ -275,8 +275,8 @@ const EcomOrders = () => {
                   <TableHead>Customer Name</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Address</TableHead>
-                  <TableHead>Amount USD</TableHead>
-                  <TableHead>Amount LBP</TableHead>
+                  <TableHead>Total USD</TableHead>
+                  <TableHead>Total LBP</TableHead>
                   <TableHead>Payment Type</TableHead>
                   <TableHead>Delivery</TableHead>
                   <TableHead>Status</TableHead>
@@ -303,8 +303,8 @@ const EcomOrders = () => {
                     <TableCell>{order.customers?.name || "-"}</TableCell>
                     <TableCell>{order.customers?.phone || "-"}</TableCell>
                     <TableCell className="max-w-[200px] truncate">{order.address}</TableCell>
-                    <TableCell>${order.order_amount_usd.toFixed(2)}</TableCell>
-                    <TableCell>{order.order_amount_lbp.toLocaleString()} LL</TableCell>
+                    <TableCell>${(Number(order.order_amount_usd) + Number(order.delivery_fee_usd)).toFixed(2)}</TableCell>
+                    <TableCell>{(Number(order.order_amount_lbp) + Number(order.delivery_fee_lbp)).toLocaleString()} LL</TableCell>
                     <TableCell>
                       {order.prepaid_by_company ? (
                         // Cash-based order that was prepaid
@@ -330,17 +330,17 @@ const EcomOrders = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-xs">
-                      {order.fulfillment === "InHouse" 
-                        ? (order.drivers?.name || "Unassigned") 
+                      {order.fulfillment === "InHouse"
+                        ? (order.drivers?.name || "Unassigned")
                         : (order.third_parties?.name || "Third-Party")}
                     </TableCell>
                     <TableCell>{getStatusBadge(order.status)}</TableCell>
                     <TableCell className="text-xs">
-                      {new Date(order.created_at).toLocaleString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+                      {new Date(order.created_at).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
                       })}
                     </TableCell>
                     <TableCell>

@@ -97,7 +97,7 @@ export function ClientStatementsTab() {
         .from('orders')
         .select(`*, customers(phone, name, address), drivers(name)`)
         .eq('client_id', selectedClient)
-        .eq('status', 'Delivered')
+        .in('status', ['Delivered', 'PaidDueByDriver', 'DriverCollected'])
         .gte('created_at', dateFrom)
         .lte('created_at', dateTo + 'T23:59:59')
         .order('created_at', { ascending: false });
@@ -217,11 +217,16 @@ export function ClientStatementsTab() {
 
       if (order.order_type === 'instant') {
         if (order.driver_paid_for_client) {
-          dueToClientUsd = Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0);
-          dueToClientLbp = Number(order.order_amount_lbp || 0) + Number(order.delivery_fee_lbp || 0);
+          dueToClientUsd = -1 * (Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0));
+          dueToClientLbp = -1 * (Number(order.order_amount_lbp || 0) + Number(order.delivery_fee_lbp || 0));
         } else {
-          dueToClientUsd = Number(order.order_amount_usd || 0);
-          dueToClientLbp = Number(order.order_amount_lbp || 0);
+          if (order.company_paid_for_order) {
+            dueToClientUsd = (Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0)) * -1;
+            dueToClientLbp = (Number(order.order_amount_lbp || 0) + Number(order.delivery_fee_lbp || 0)) * -1;
+          } else {
+            dueToClientUsd = Number(order.order_amount_usd || 0);
+            dueToClientLbp = Number(order.order_amount_lbp || 0);
+          }
         }
       } else {
         dueToClientUsd = Number(order.amount_due_to_client_usd || 0);
@@ -250,14 +255,28 @@ export function ClientStatementsTab() {
 
   const totals = calculateTotals();
   const selectedClientData = clients?.find(c => c.id === selectedClient);
-  const clientBalance = clientBalances?.get(selectedClient) || { usd: 0, lbp: 0 };
   // Determine if we owe client or they owe us based on net balance
   // Positive balance = we owe client, Negative = they owe us
   // If mixed (one positive, one negative), use the dominant currency or sum them logically
-  const netBalanceIndicator = clientBalance.usd + (clientBalance.lbp / 100000); // rough comparison
-  const weOweClient = netBalanceIndicator > 0 || (clientBalance.usd === 0 && clientBalance.lbp > 0);
+
   const unpaidStatements = statementHistory?.filter(s => s.status === 'unpaid')?.length || 0;
   const totalPending = orders?.length || 0;
+
+  // const unpaidStatementsTotal =
+  //   statementHistory
+  //     ?.filter(s => s.status === 'unpaid')
+  //     .reduce((sum, s) => sum + Number(s.net_due_usd || 0), 0) || 0;
+
+  const clientBalance = clientBalances?.get(selectedClient) || { usd: 0, lbp: 0 };
+  const transactionBalance = clientBalances?.get(selectedClient) || { usd: 0, lbp: 0 };
+
+  const usdLbpTransactionBalance = transactionBalance.usd + (clientBalance.lbp / 100000);
+  const realBalanceUsd = usdLbpTransactionBalance /* + unpaidStatementsTotal */;
+
+  // Determine payment direction based on current balance:
+  // If we owe the client (positive balance) = we're paying them = cash out
+  // If client owes us (negative balance) = they're paying us = cash in
+  const isPayingClient = realBalanceUsd > 0;
 
   const issueStatementMutation = useMutation({
     mutationFn: async () => {
@@ -288,6 +307,21 @@ export function ClientStatementsTab() {
       });
 
       if (insertError) throw insertError;
+      // we add a credit transaction when we make a statment so that the balance of the client can change to accept payments
+      // if credited => should take money
+      // if debited => should pay money
+      if (totals.totalDueToClientUsd > 0 || totals.totalDueToClientLbp > 0) {// come fix if statement has more then one order with differant type (some are company paid and some are not)
+        const { error: insertTransactionError } = await supabase.from('client_transactions').insert({
+          client_id: selectedClient,
+          type: 'Credit',
+          amount_usd: totals.totalDueToClientUsd,
+          amount_lbp: totals.totalDueToClientLbp,
+          note:
+            `We owe Client the statement amount- ${statementIdData}`,
+        });
+
+        if (insertTransactionError) throw insertTransactionError;
+      }
       return statementIdData;
     },
     onSuccess: (statementId) => {
@@ -308,12 +342,6 @@ export function ClientStatementsTab() {
 
       if (amountUsd === 0 && amountLbp === 0) throw new Error('Enter a payment amount');
 
-      // Determine payment direction based on current balance:
-      // If we owe the client (positive balance) = we're paying them = cash out
-      // If client owes us (negative balance) = they're paying us = cash in
-      const currentNetBalance = clientBalance.usd + (clientBalance.lbp / 100000);
-      const isPayingClient = currentNetBalance > 0 || (clientBalance.usd === 0 && clientBalance.lbp > 0);
-
       const today = new Date().toISOString().split('T')[0];
 
       // Use atomic cashbox update
@@ -324,6 +352,14 @@ export function ClientStatementsTab() {
         p_cash_out_usd: isPayingClient ? amountUsd : 0,
         p_cash_out_lbp: isPayingClient ? amountLbp : 0,
       });
+      console.log("realBalanceUsd:", realBalanceUsd);
+      console.log(
+        "p_date: ", today,
+        "p_cash_in_usd: ", isPayingClient ? 0 : amountUsd,
+        "p_cash_in_lbp: ", isPayingClient ? 0 : amountLbp,
+        "p_cash_out_usd: ", isPayingClient ? amountUsd : 0,
+        "p_cash_out_lbp: ", isPayingClient ? amountLbp : 0,
+      )
 
       if (cashboxError) throw cashboxError;
 
@@ -365,12 +401,12 @@ export function ClientStatementsTab() {
             await supabase.from('order_transactions').insert(transactions);
 
             // Update orders client_settlement_status
-            await supabase.from('orders')
-              .update({
-                client_settlement_status: 'Paid',
-                driver_remit_status: 'Collected'
-              })
-              .in('id', orderData.map(o => o.id));
+            // await supabase.from('orders')
+            //   .update({
+            //     client_settlement_status: 'Paid',
+            //     driver_remit_status: 'Collected'
+            //   })
+            //   .in('id', orderData.map(o => o.id));
           }
         }
 
@@ -508,7 +544,7 @@ export function ClientStatementsTab() {
                 disabled={!selectedClient}
               >
                 <DollarSign className="mr-1.5 h-3.5 w-3.5" />
-                {weOweClient ? 'Pay Client' : 'Receive'}
+                {isPayingClient ? 'Pay Client' : 'Receive'}
               </Button>
             </div>
           </div>
@@ -524,14 +560,14 @@ export function ClientStatementsTab() {
                 <Wallet className="h-4 w-4 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">Balance</span>
               </div>
-              <div className={`font-bold font-mono mt-1 ${clientBalance.usd < 0 || clientBalance.lbp < 0 ? 'text-status-error' : 'text-status-success'}`}>
-                <p className="text-lg">${Math.abs(clientBalance.usd).toFixed(2)}</p>
+              <div className={`font-bold font-mono mt-1 ${realBalanceUsd < 0 || clientBalance.lbp < 0 ? 'text-status-error' : 'text-status-success'}`}>
+                <p className="text-lg">${Math.abs(realBalanceUsd).toFixed(2)}</p>
                 {clientBalance.lbp !== 0 && (
                   <p className="text-sm">{Math.abs(clientBalance.lbp).toLocaleString()} LL</p>
                 )}
               </div>
-              <Badge variant="outline" className={`text-xs mt-1 ${weOweClient ? 'border-status-success text-status-success' : 'border-status-error text-status-error'}`}>
-                {weOweClient ? (
+              <Badge variant="outline" className={`text-xs mt-1 ${isPayingClient ? 'border-status-success text-status-success' : 'border-status-error text-status-error'}`}>
+                {isPayingClient ? (
                   <><ArrowUpRight className="mr-0.5 h-3 w-3" />We Owe</>
                 ) : (
                   <><ArrowDownLeft className="mr-0.5 h-3 w-3" />They Owe</>
@@ -586,7 +622,7 @@ export function ClientStatementsTab() {
       )}
 
       {/* Balance Breakdown Section - shows what makes up the current balance */}
-      {selectedClient && (clientBalance.usd !== 0 || clientBalance.lbp !== 0) && (
+      {selectedClient && (realBalanceUsd !== 0 || clientBalance.lbp !== 0) && (
         <Collapsible open={balanceBreakdownExpanded} onOpenChange={setBalanceBreakdownExpanded}>
           <Card className="border-sidebar-border border-dashed">
             <CollapsibleTrigger asChild>
@@ -708,7 +744,7 @@ export function ClientStatementsTab() {
 
                           if (order.order_type === 'instant') {
                             if (order.driver_paid_for_client) {
-                              dueToClientUsd = orderAmountUsd + feeUsd;
+                              dueToClientUsd = -1 * (orderAmountUsd + feeUsd);
                             } else {
                               dueToClientUsd = orderAmountUsd;
                             }
@@ -775,13 +811,9 @@ export function ClientStatementsTab() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setPreviewDialogOpen(true)}>
+                      <Button size="sm" disabled={issueStatementMutation.isPending} onClick={() => setPreviewDialogOpen(true)}>
                         <Eye className="mr-1.5 h-3.5 w-3.5" />
-                        Preview
-                      </Button>
-                      <Button size="sm" onClick={() => issueStatementMutation.mutate()} disabled={issueStatementMutation.isPending}>
-                        <FileText className="mr-1.5 h-3.5 w-3.5" />
-                        {issueStatementMutation.isPending ? 'Processing...' : 'Issue Statement'}
+                        {issueStatementMutation.isPending ? 'Processing...' : 'Preview & Issue'}
                       </Button>
                     </div>
                   </div>
@@ -861,7 +893,7 @@ export function ClientStatementsTab() {
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() => openPaymentDialog(statement)}
+                                onClick={() => { openPaymentDialog(statement) }}
                               >
                                 <DollarSign className="mr-1 h-3 w-3" />
                                 Pay
@@ -895,7 +927,7 @@ export function ClientStatementsTab() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {weOweClient ? 'Pay Client' : 'Receive Payment'}
+              {isPayingClient ? 'Pay Client' : 'Receive Payment'}
             </DialogTitle>
             <DialogDescription>
               {selectedStatement ? (
@@ -913,13 +945,13 @@ export function ClientStatementsTab() {
                 <span className="block mt-1">
                   Client: <span className="font-medium">{selectedClientData?.name}</span>
                   <br />
-                  Current Balance: <span className={`font-mono font-semibold ${weOweClient ? 'text-status-success' : 'text-status-error'}`}>
-                    ${Math.abs(clientBalance.usd).toFixed(2)}
+                  Current Balance: <span className={`font-mono font-semibold ${isPayingClient ? 'text-status-success' : 'text-status-error'}`}>
+                    ${Math.abs(realBalanceUsd).toFixed(2)}
                     {clientBalance.lbp !== 0 && (
                       <span className="ml-2">{Math.abs(clientBalance.lbp).toLocaleString()} LL</span>
                     )}
                   </span>
-                  <span className="text-xs ml-2">({weOweClient ? 'We owe client' : 'Client owes us'})</span>
+                  <span className="text-xs ml-2">({isPayingClient ? 'We owe client' : 'Client owes us'})</span>
                 </span>
               )}
             </DialogDescription>
@@ -984,6 +1016,7 @@ export function ClientStatementsTab() {
         clientName={previewStatement?.clients?.name || selectedClientData?.name || ''}
         dateFrom={previewStatement?.period_from || dateFrom}
         dateTo={previewStatement?.period_to || dateTo}
+        issueStatementMutation={issueStatementMutation}
         totals={previewStatement ? {
           totalOrders: previewStatement.order_refs?.length || 0,
           totalOrderAmountUsd: Number(previewStatement.total_order_amount_usd || 0),

@@ -21,7 +21,7 @@ const clientSchema = z.object({
   phone: z.string().max(20),
   address: z.string().max(255),
   location_link: z.string().max(500).optional(),
-  default_currency: z.enum(['USD', 'LBP']),
+  // default_currency: z.enum(['USD', 'LBP']),
   fee_rule: z.enum(['ADD_ON', 'DEDUCT', 'INCLUDED']),
 });
 
@@ -40,7 +40,7 @@ const CreateClientDialog = ({ open, onOpenChange }: CreateClientDialogProps) => 
     phone: '',
     address: '',
     location_link: '',
-    default_currency: 'USD' as 'USD' | 'LBP',
+    // default_currency: 'USD' as 'USD' | 'LBP',
     fee_rule: 'ADD_ON' as 'ADD_ON' | 'DEDUCT' | 'INCLUDED',
   });
 
@@ -56,7 +56,7 @@ const CreateClientDialog = ({ open, onOpenChange }: CreateClientDialogProps) => 
           phone: data.phone,
           address: data.address,
           location_link: data.location_link,
-          default_currency: data.default_currency,
+          // default_currency: data.default_currency,
         }])
         .select()
         .single();
@@ -91,7 +91,7 @@ const CreateClientDialog = ({ open, onOpenChange }: CreateClientDialogProps) => 
         phone: '',
         address: '',
         location_link: '',
-        default_currency: 'USD',
+        // default_currency: 'USD',
         fee_rule: 'ADD_ON',
       });
     },
@@ -158,20 +158,22 @@ const CreateClientDialog = ({ open, onOpenChange }: CreateClientDialogProps) => 
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="contact_name">Contact Name</Label>
+              <Label htmlFor="contact_name">Contact Name *</Label>
               <Input
                 id="contact_name"
                 value={formData.contact_name}
+                required
                 onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
                 placeholder="Contact person"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
+              <Label htmlFor="phone">Phone *</Label>
               <Input
                 id="phone"
                 value={formData.phone}
+                required
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 placeholder="Phone number"
               />
@@ -179,60 +181,25 @@ const CreateClientDialog = ({ open, onOpenChange }: CreateClientDialogProps) => 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
+            <Label htmlFor="address">Address *</Label>
             <Input
               id="address"
               value={formData.address}
+              required
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               placeholder="Client address"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="location_link">Google Maps Link</Label>
+            <Label htmlFor="location_link">Google Maps Link *</Label>
             <Input
               id="location_link"
               value={formData.location_link}
+              required
               onChange={(e) => setFormData({ ...formData, location_link: e.target.value })}
               placeholder="https://maps.google.com/..."
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="currency">Default Currency *</Label>
-              <Select
-                value={formData.default_currency}
-                onValueChange={(value: any) => setFormData({ ...formData, default_currency: value })}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD">USD</SelectItem>
-                  <SelectItem value="LBP">LBP</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="fee_rule">Fee Rule *</Label>
-              <Select
-                value={formData.fee_rule}
-                onValueChange={(value: any) => setFormData({ ...formData, fee_rule: value })}
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ADD_ON">Add On</SelectItem>
-                  <SelectItem value="DEDUCT">Deduct</SelectItem>
-                  <SelectItem value="INCLUDED">Included</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
 

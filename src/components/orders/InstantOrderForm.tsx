@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -59,6 +59,8 @@ function OrderRow({
   removeRow: (id: string) => void;
   addNewRow: (duplicateLast?: boolean) => void;
   createOrderMutation: any;
+  // isLoading: boolean;
+  // setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const addressRef = useRef<HTMLButtonElement>(null);
   const driverRef = useRef<HTMLButtonElement>(null);
@@ -75,6 +77,8 @@ function OrderRow({
   const [addressOpen, setAddressOpen] = useState(false);
   const [addressSearch, setAddressSearch] = useState("");
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const filteredClients = clients.filter((c) =>
     c.name.toLowerCase().includes(clientSearch.toLowerCase())
   );
@@ -89,28 +93,28 @@ function OrderRow({
   const selectedDriver = drivers.find((d) => d.id === row.driver_id);
 
   const handleClientSelect = useCallback((id: string) => {
-    updateRow(row.id, "client_id", id);
+    updateRow(row.id, "client_id", id === row.client_id ? "" : id);
     setClientSearch("");
     setClientOpen(false);
     setTimeout(() => addressRef.current?.click(), 0);
   }, [row.id, updateRow]);
 
   const handleDriverSelect = useCallback((id: string) => {
-    updateRow(row.id, "driver_id", id);
+    updateRow(row.id, "driver_id", id === row.driver_id ? "" : id);
     setDriverSearch("");
     setDriverOpen(false);
     setTimeout(() => amountLbpRef.current?.focus(), 0);
   }, [row.id, updateRow]);
 
   const handleAddressSelect = useCallback((address: string) => {
-    updateRow(row.id, "address", address);
+    updateRow(row.id, "address", address === row.address ? "" : address);
     setAddressSearch("");
     setAddressOpen(false);
     setTimeout(() => driverRef.current?.click(), 0);
   }, [row.id, updateRow]);
 
   return (
-    <TableRow 
+    <TableRow
       className="bg-accent/20"
       onKeyDown={(e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
@@ -128,8 +132,8 @@ function OrderRow({
       <TableCell>
         <Popover open={clientOpen} onOpenChange={setClientOpen}>
           <PopoverTrigger asChild>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full justify-between h-8 text-xs"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey)) {
@@ -144,8 +148,8 @@ function OrderRow({
           </PopoverTrigger>
           <PopoverContent className="w-[200px] p-0 bg-popover z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
             <Command shouldFilter={false}>
-              <CommandInput 
-                placeholder="Search..." 
+              <CommandInput
+                placeholder="Search..."
                 value={clientSearch}
                 onValueChange={setClientSearch}
                 autoFocus
@@ -176,9 +180,9 @@ function OrderRow({
       <TableCell>
         <Popover open={addressOpen} onOpenChange={setAddressOpen}>
           <PopoverTrigger asChild>
-            <Button 
+            <Button
               ref={addressRef}
-              variant="outline" 
+              variant="outline"
               className="w-full justify-between h-8 text-xs"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey)) {
@@ -193,8 +197,8 @@ function OrderRow({
           </PopoverTrigger>
           <PopoverContent className="w-[200px] p-0 bg-popover z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
             <Command shouldFilter={false}>
-              <CommandInput 
-                placeholder="Type address..." 
+              <CommandInput
+                placeholder="Type address..."
                 value={addressSearch}
                 onValueChange={setAddressSearch}
                 autoFocus
@@ -230,9 +234,9 @@ function OrderRow({
       <TableCell>
         <Popover open={driverOpen} onOpenChange={setDriverOpen}>
           <PopoverTrigger asChild>
-            <Button 
+            <Button
               ref={driverRef}
-              variant="outline" 
+              variant="outline"
               className="w-full justify-between h-8 text-xs"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || (e.key.length === 1 && !e.ctrlKey && !e.metaKey)) {
@@ -247,8 +251,8 @@ function OrderRow({
           </PopoverTrigger>
           <PopoverContent className="w-[200px] p-0 bg-popover z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
             <Command shouldFilter={false}>
-              <CommandInput 
-                placeholder="Search..." 
+              <CommandInput
+                placeholder="Search..."
                 value={driverSearch}
                 onValueChange={setDriverSearch}
                 autoFocus
@@ -317,10 +321,10 @@ function OrderRow({
 
       {/* Notes */}
       <TableCell>
-        <Input 
+        <Input
           ref={notesRef}
-          value={row.notes} 
-          onChange={(e) => updateRow(row.id, "notes", e.target.value)} 
+          value={row.notes}
+          onChange={(e) => updateRow(row.id, "notes", e.target.value)}
           className="h-8 text-xs"
         />
       </TableCell>
@@ -328,7 +332,7 @@ function OrderRow({
       {/* Driver Paid */}
       <TableCell>
         <div className="flex justify-center">
-          <Checkbox 
+          <Checkbox
             checked={row.driver_paid_for_client}
             onCheckedChange={(checked) => {
               const next = checked === true;
@@ -347,7 +351,7 @@ function OrderRow({
       {/* Company Paid */}
       <TableCell>
         <div className="flex justify-center">
-          <Checkbox 
+          <Checkbox
             checked={row.company_paid_for_order}
             onCheckedChange={(checked) => {
               const next = checked === true;
@@ -366,18 +370,23 @@ function OrderRow({
       {/* Actions */}
       <TableCell>
         <div className="flex gap-1">
-          <Button 
-            size="sm" 
-            onClick={() => createOrderMutation.mutate(row)} 
-            disabled={!row.client_id || !row.address} 
+          <Button
+            size="sm"
+            onClick={() => {
+              if (!isLoading) {
+                setIsLoading(true);
+                createOrderMutation.mutate(row);
+              }
+            }}
+            disabled={isLoading || !row.client_id || !row.address}
             className="h-8 text-xs"
           >
             Save
           </Button>
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             variant="destructive"
-            onClick={() => removeRow(row.id)} 
+            onClick={() => removeRow(row.id)}
             className="h-8 text-xs"
             tabIndex={-1}
           >
@@ -385,12 +394,14 @@ function OrderRow({
           </Button>
         </div>
       </TableCell>
-    </TableRow>
+    </TableRow >
   );
 }
 
 export function InstantOrderForm() {
+
   const queryClient = useQueryClient();
+
   const [newRows, setNewRows] = useState<NewOrderRow[]>([
     {
       id: `new-${Date.now()}`,
@@ -442,32 +453,45 @@ export function InstantOrderForm() {
 
   const addNewRow = (duplicateLast = false) => {
     const lastRow = newRows[newRows.length - 1];
-    const newRow: NewOrderRow = duplicateLast && lastRow ? {
+    const newRow: NewOrderRow = {
       id: `new-${Date.now()}`,
-      client_id: lastRow.client_id,
-      address: lastRow.address,
-      driver_id: lastRow.driver_id,
-      order_amount_usd: lastRow.order_amount_usd,
-      order_amount_lbp: lastRow.order_amount_lbp,
-      delivery_fee_usd: lastRow.delivery_fee_usd,
-      delivery_fee_lbp: lastRow.delivery_fee_lbp,
-      notes: "",
-      driver_paid_for_client: lastRow.driver_paid_for_client,
-      company_paid_for_order: lastRow.company_paid_for_order,
-    } : {
-      id: `new-${Date.now()}`,
-      client_id: lastRow?.client_id || "",
-      address: lastRow?.address || "",
-      driver_id: lastRow?.driver_id || "",
+      client_id: "",
+      address: "",
+      driver_id: "",
       order_amount_usd: "",
       order_amount_lbp: "",
-      delivery_fee_usd: lastRow?.delivery_fee_usd || "",
-      delivery_fee_lbp: lastRow?.delivery_fee_lbp || "",
+      delivery_fee_usd: "",
+      delivery_fee_lbp: "",
       notes: "",
       driver_paid_for_client: false,
       company_paid_for_order: false,
     };
-    
+    // const newRow: NewOrderRow = duplicateLast && lastRow ? {
+    //   id: `new-${Date.now()}`,
+    //   client_id: lastRow.client_id,
+    //   address: lastRow.address,
+    //   driver_id: lastRow.driver_id,
+    //   order_amount_usd: lastRow.order_amount_usd,
+    //   order_amount_lbp: lastRow.order_amount_lbp,
+    //   delivery_fee_usd: lastRow.delivery_fee_usd,
+    //   delivery_fee_lbp: lastRow.delivery_fee_lbp,
+    //   notes: "",
+    //   driver_paid_for_client: lastRow.driver_paid_for_client,
+    //   company_paid_for_order: lastRow.company_paid_for_order,
+    // } : {
+    //   id: `new-${Date.now()}`,
+    //   client_id: lastRow?.client_id || "",
+    //   address: lastRow?.address || "",
+    //   driver_id: lastRow?.driver_id || "",
+    //   order_amount_usd: "",
+    //   order_amount_lbp: "",
+    //   delivery_fee_usd: lastRow?.delivery_fee_usd || "",
+    //   delivery_fee_lbp: lastRow?.delivery_fee_lbp || "",
+    //   notes: "",
+    //   driver_paid_for_client: false,
+    //   company_paid_for_order: false,
+    // };
+
     setNewRows((prev) => [...prev, newRow]);
   };
 
@@ -510,7 +534,7 @@ export function InstantOrderForm() {
       const timestamp = Date.now().toString().slice(-6);
       const order_id = `${prefix}-${timestamp}`;
 
-      const clientFeeRule = client.client_rules?.[0]?.fee_rule || "ADD_ON";
+      const clientFeeRule = /* client.client_rules?.[0]?.fee_rule || */ "ADD_ON";
 
       const orderData: any = {
         order_id,
@@ -539,12 +563,12 @@ export function InstantOrderForm() {
           orderData.driver_paid_reason = validatedData.notes;
         }
       }
-      
+
       // If company paid from cashbox, also set the paid amounts and debit cashbox
       if (validatedData.company_paid_for_order) {
         orderData.driver_paid_amount_usd = validatedData.order_amount_usd;
         orderData.driver_paid_amount_lbp = validatedData.order_amount_lbp;
-        
+
         // Debit cashbox atomically when company pays for the order
         const today = new Date().toISOString().split('T')[0];
         const { error: cashboxError } = await (supabase.rpc as any)('update_cashbox_atomic', {
@@ -554,7 +578,7 @@ export function InstantOrderForm() {
           p_cash_out_usd: validatedData.order_amount_usd,
           p_cash_out_lbp: validatedData.order_amount_lbp,
         });
-        
+
         if (cashboxError) {
           throw new Error('Failed to update cashbox: ' + cashboxError.message);
         }
@@ -566,6 +590,7 @@ export function InstantOrderForm() {
       return rowData.id;
     },
     onSuccess: (rowId, variables) => {
+      // setIsLoading(false);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["instant-orders"] });
       if (variables.company_paid_for_order) {
@@ -576,16 +601,16 @@ export function InstantOrderForm() {
         const filtered = currentRows.filter((r) => r.id !== rowId);
         // If we just removed the last row, add a new one with pre-filled values
         if (filtered.length === 0) {
-          const savedRow = currentRows.find((r) => r.id === rowId);
+          // const savedRow = currentRows.find((r) => r.id === rowId);
           return [{
             id: `new-${Date.now()}`,
-            client_id: savedRow?.client_id || "",
-            address: savedRow?.address || "",
-            driver_id: savedRow?.driver_id || "",
+            client_id: "",
+            address: "",
+            driver_id: "",
             order_amount_usd: "",
             order_amount_lbp: "",
-            delivery_fee_usd: savedRow?.delivery_fee_usd || "",
-            delivery_fee_lbp: savedRow?.delivery_fee_lbp || "",
+            delivery_fee_usd: "",
+            delivery_fee_lbp: "",
             notes: "",
             driver_paid_for_client: false,
             company_paid_for_order: false,
@@ -639,6 +664,8 @@ export function InstantOrderForm() {
                 removeRow={removeRow}
                 addNewRow={addNewRow}
                 createOrderMutation={createOrderMutation}
+              // isLoading={isLoading}
+              // setIsLoading={setIsLoading}
               />
             ))}
           </TableBody>

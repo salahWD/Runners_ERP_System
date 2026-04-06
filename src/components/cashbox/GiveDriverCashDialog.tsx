@@ -9,10 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 
+import { DateRange } from "react-day-picker";
+
 interface GiveDriverCashDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  date: string;
+  date: DateRange;
   preselectedDriver?: any;
 }
 
@@ -90,7 +92,7 @@ export default function GiveDriverCashDialog({ open, onOpenChange, date, presele
 
       // Use atomic cashbox update
       const { error: cashboxError } = await (supabase.rpc as any)('update_cashbox_atomic', {
-        p_date: date,
+        p_date: date.from.toISOString().split('T')[0],
         p_cash_in_usd: 0,
         p_cash_in_lbp: 0,
         p_cash_out_usd: amountUsd,

@@ -9,10 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 
+import { DateRange } from "react-day-picker";
+
 interface CashboxTransactionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  date: string;
+  // date: string;
+  date: DateRange;
   type: 'in' | 'out';
 }
 
@@ -35,7 +38,7 @@ export default function CashboxTransactionDialog({ open, onOpenChange, date, typ
 
       // Use atomic cashbox update
       const { error: cashboxError } = await (supabase.rpc as any)('update_cashbox_atomic', {
-        p_date: date,
+        p_date: date.from.toISOString().split('T')[0],
         p_cash_in_usd: type === 'in' ? amountUsd : 0,
         p_cash_in_lbp: type === 'in' ? amountLbp : 0,
         p_cash_out_usd: type === 'out' ? amountUsd : 0,
@@ -49,18 +52,22 @@ export default function CashboxTransactionDialog({ open, onOpenChange, date, typ
         const { data: existing } = await supabase
           .from('cashbox_daily')
           .select('notes')
-          .eq('date', date)
+          .gte('date', date.from.toISOString().split('T')[0])
+          .lte('date', date.to.toISOString().split('T')[0])
+          // .eq('date', date)
           .maybeSingle();
-        
+
         const noteText = `${new Date().toLocaleString()}: ${type === 'in' ? 'Added' : 'Withdrew'} ${amountNum} ${currency} - ${notes}`;
-        const updatedNotes = existing?.notes 
+        const updatedNotes = existing?.notes
           ? `${existing.notes}\n${noteText}`
           : noteText;
-        
+
         await supabase
           .from('cashbox_daily')
           .update({ notes: updatedNotes })
-          .eq('date', date);
+          .gte('date', date.from.toISOString().split('T')[0])
+          .lte('date', date.to.toISOString().split('T')[0]);
+        // .eq('date', date);
       }
     },
     onSuccess: () => {

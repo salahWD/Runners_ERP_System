@@ -32,7 +32,7 @@ export function DriverStatementInlineDetail({ statement }: DriverStatementInline
     queryKey: ['statement-orders-inline', statement.id],
     queryFn: async () => {
       if (!statement.order_refs?.length) return [];
-      
+
       const { data, error } = await supabase
         .from('orders')
         .select(`*, clients(name)`)
@@ -70,7 +70,7 @@ export function DriverStatementInlineDetail({ statement }: DriverStatementInline
 
     text += `*ORDERS (${orders?.length || 0})*\n`;
     text += `─────────────────────\n`;
-    
+
     orders?.forEach((order: any, idx: number) => {
       const collectedUsd = Number(order.collected_amount_usd || 0);
       const collectedLbp = Number(order.collected_amount_lbp || 0);
@@ -78,9 +78,9 @@ export function DriverStatementInlineDetail({ statement }: DriverStatementInline
       const feeLbp = Number(order.delivery_fee_lbp || 0);
       const driverPaidUsd = Number(order.driver_paid_amount_usd || 0);
       const driverPaidLbp = Number(order.driver_paid_amount_lbp || 0);
-      
+
       const orderRef = order.order_type === 'ecom' ? (order.voucher_no || order.order_id) : order.order_id;
-      
+
       text += `\n${idx + 1}. *${orderRef}*\n`;
       text += `   📅 ${order.delivered_at ? format(new Date(order.delivered_at), 'MMM dd, yyyy') : 'N/A'}\n`;
       text += `   🏪 ${order.clients?.name || 'N/A'}\n`;
@@ -136,6 +136,7 @@ export function DriverStatementInlineDetail({ statement }: DriverStatementInline
                 <TableHead className="py-1.5">Date</TableHead>
                 <TableHead className="py-1.5">Order</TableHead>
                 <TableHead className="py-1.5">Client</TableHead>
+                <TableHead className="py-1.5">Notes</TableHead>
                 <TableHead className="py-1.5 text-right">Collected</TableHead>
                 <TableHead className="py-1.5 text-right">Fee</TableHead>
                 <TableHead className="py-1.5 text-right">Driver Paid</TableHead>
@@ -143,6 +144,8 @@ export function DriverStatementInlineDetail({ statement }: DriverStatementInline
             </TableHeader>
             <TableBody>
               {orders?.map((order: any) => {
+                console.log("order:")
+                console.log(order)
                 const collectedUsd = Number(order.collected_amount_usd || 0);
                 const collectedLbp = Number(order.collected_amount_lbp || 0);
                 const feeUsd = Number(order.delivery_fee_usd || 0);
@@ -150,12 +153,13 @@ export function DriverStatementInlineDetail({ statement }: DriverStatementInline
                 const driverPaidUsd = Number(order.driver_paid_amount_usd || 0);
                 const driverPaidLbp = Number(order.driver_paid_amount_lbp || 0);
                 const orderRef = order.order_type === 'ecom' ? (order.voucher_no || order.order_id) : order.order_id;
-                
+
                 return (
                   <TableRow key={order.id} className="text-xs">
                     <TableCell className="py-1.5">{order.delivered_at ? format(new Date(order.delivered_at), 'MMM dd') : '-'}</TableCell>
                     <TableCell className="py-1.5 font-mono">{orderRef}</TableCell>
                     <TableCell className="py-1.5">{order.clients?.name || '-'}</TableCell>
+                    <TableCell className="py-1.5">{order.notes || '-'}</TableCell>
                     <TableCell className="py-1.5 text-right">
                       {formatAmount(collectedUsd, collectedLbp)}
                     </TableCell>

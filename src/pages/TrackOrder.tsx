@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { OrderTrackingTimeline } from "@/components/orders/OrderTrackingTimeline";
+import { OrderTimeline } from "@/components/orders/OrderTrackingTimeline";
 import { Package, Search, MapPin, Phone, User, Building, Calendar, Truck } from "lucide-react";
 
 export default function TrackOrder() {
@@ -23,10 +23,9 @@ export default function TrackOrder() {
         .select(`
           *,
           clients(name),
-          customers(phone, name),
-          delivery_zones(name, code)
+          customers(phone, name)
         `)
-        .or(`tracking_number.eq.${trackingNumber},voucher_no.eq.${trackingNumber},order_id.eq.${trackingNumber}`)
+        .or(`voucher_no.eq.${trackingNumber},order_id.eq.${trackingNumber}`)
         .single();
 
       if (error) {
@@ -171,17 +170,6 @@ export default function TrackOrder() {
                   </div>
 
                   <div className="space-y-3">
-                    {order.delivery_zones && (
-                      <div className="flex items-start gap-2">
-                        <Truck className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm text-muted-foreground">Delivery Zone</p>
-                          <p className="font-medium">
-                            {order.delivery_zones.name} ({order.delivery_zones.code})
-                          </p>
-                        </div>
-                      </div>
-                    )}
                     {order.promised_date && (
                       <div className="flex items-start gap-2">
                         <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -216,7 +204,7 @@ export default function TrackOrder() {
                 <CardTitle>Tracking History</CardTitle>
               </CardHeader>
               <CardContent>
-                <OrderTrackingTimeline orderId={order.id} />
+                <OrderTimeline orderId={order.id} />
               </CardContent>
             </Card>
           </div>

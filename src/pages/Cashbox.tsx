@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Layout from '@/components/Layout';
@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Minus, HandCoins, Receipt, History, Wallet, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CashboxTransactionDialog from '@/components/cashbox/CashboxTransactionDialog';
 import GiveDriverCashDialog from '@/components/cashbox/GiveDriverCashDialog';
@@ -16,6 +15,11 @@ import ExpensesTable from '@/components/cashbox/ExpensesTable';
 import TransactionHistoryTable from '@/components/cashbox/TransactionHistoryTable';
 import AllExpensesTab from '@/components/cashbox/AllExpensesTab';
 import { format, addDays, subDays } from 'date-fns';
+import { Calendar as Cal } from "@/components/ui/calendar";
+import { DateRange } from "react-day-picker";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 const Cashbox = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -25,18 +29,13 @@ const Cashbox = () => {
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('daily');
 
-  const goToPrevDay = () => {
-    const newDate = subDays(new Date(selectedDate), 1);
-    setSelectedDate(format(newDate, 'yyyy-MM-dd'));
-  };
-
-  const goToNextDay = () => {
-    const newDate = addDays(new Date(selectedDate), 1);
-    setSelectedDate(format(newDate, 'yyyy-MM-dd'));
-  };
+  const [range, setRange] = useState<DateRange | undefined>(undefined);
+  const [transactionType, setTransactionType] = useState<string>("All");
+  const [search, setSearch] = useState<string>("");
 
   const goToToday = () => {
     setSelectedDate(new Date().toISOString().split('T')[0]);
+    setRange({ from: new Date(), to: new Date() });
   };
 
   const { data: cashbox, isLoading } = useQuery({
@@ -45,7 +44,8 @@ const Cashbox = () => {
       const { data, error } = await supabase
         .from('cashbox_daily')
         .select('*')
-        .eq('date', selectedDate)
+        .gte('date', range?.from.toISOString().split('T')[0] || selectedDate)
+        .lte('date', range?.to.toISOString().split('T')[0] || selectedDate)
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -58,7 +58,9 @@ const Cashbox = () => {
       const { data, error } = await supabase
         .from('daily_expenses')
         .select('*, expense_categories(*)')
-        .eq('date', selectedDate)
+        .gte('date', range?.from.toISOString().split('T')[0] || selectedDate)
+        .lte('date', range?.to.toISOString().split('T')[0] || selectedDate)
+        // .eq('date', selectedDate)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
@@ -72,8 +74,10 @@ const Cashbox = () => {
         .from('accounting_entries')
         .select('amount_usd, amount_lbp, category, ts')
         .eq('category', 'DeliveryIncome')
-        .gte('ts', selectedDate)
-        .lte('ts', selectedDate + 'T23:59:59');
+        .gte('ts', range?.from.toISOString().split('T')[0] || selectedDate)
+        .lte('ts', (range?.to.toISOString().split('T')[0] || selectedDate) + 'T23:59:59')
+      // .gte('ts', selectedDate)
+      // .lte('ts', selectedDate + 'T23:59:59');
       if (error) throw error;
       return data;
     },
@@ -84,8 +88,6 @@ const Cashbox = () => {
 
   const revenueUSD = incomeEntries?.reduce((sum: number, entry: any) => sum + Number(entry.amount_usd || 0), 0) || 0;
   const revenueLBP = incomeEntries?.reduce((sum: number, entry: any) => sum + Number(entry.amount_lbp || 0), 0) || 0;
-
-  const isToday = selectedDate === new Date().toISOString().split('T')[0];
 
   return (
     <Layout>
@@ -99,7 +101,7 @@ const Cashbox = () => {
             </h1>
             <p className="text-muted-foreground mt-1">Daily cash flow management and expense tracking</p>
           </div>
-          
+
           {/* Quick Actions */}
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => setAddCapitalOpen(true)} variant="default" size="sm">
@@ -141,28 +143,54 @@ const Cashbox = () => {
           {/* Date Navigation - Only show for daily and transactions tabs */}
           {(activeTab === 'daily' || activeTab === 'transactions') && (
             <div className="flex items-center gap-2 mt-4">
-              <Button variant="outline" size="icon" onClick={goToPrevDay}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-auto"
-                />
-                {!isToday && (
-                  <Button variant="outline" size="sm" onClick={goToToday}>
-                    Today
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-[240px] justify-start text-left font-normal"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {range?.from ? (
+                      range.to ? (
+                        <>
+                          {format(range.from, "yyyy-MM-dd")} →{" "}
+                          {format(range.to, "yyyy-MM-dd")}
+                        </>
+                      ) : (
+                        format(range.from, "yyyy-MM-dd")
+                      )
+                    ) : (
+                      <span>Select date range</span>
+                    )}
                   </Button>
-                )}
-              </div>
-              <Button variant="outline" size="icon" onClick={goToNextDay}>
-                <ChevronRight className="h-4 w-4" />
+                </PopoverTrigger>
+
+                <PopoverContent className="w-auto p-0">
+                  <Cal
+                    mode="range"
+                    selected={range}
+                    onSelect={setRange}
+                    numberOfMonths={2} // optional but nice UX
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button variant="outline" onClick={goToToday}>
+                Today
               </Button>
-              <span className="text-sm text-muted-foreground ml-2">
-                {format(new Date(selectedDate), 'EEEE, MMMM d, yyyy')}
-              </span>
+              <div className="space-y-2">
+                <Select value={transactionType} onValueChange={setTransactionType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="All">All</SelectItem>
+                    <SelectItem value="driver">Driver</SelectItem>
+                    <SelectItem value="expense">Expense</SelectItem>
+                    <SelectItem value="accounting">Accounting</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Input placeholder="Search transactions..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
             </div>
           )}
 
@@ -217,7 +245,7 @@ const Cashbox = () => {
               <Card>
                 <CardContent className="pt-6">
                   <p className="text-center text-muted-foreground">
-                    No cashbox data for {format(new Date(selectedDate), 'MMMM d, yyyy')}. 
+                    No cashbox data for {format(new Date(range?.from || selectedDate), 'MMMM d, yyyy')}-{format(new Date(range?.to || selectedDate), 'MMMM d, yyyy')}.
                     Add a transaction to initialize.
                   </p>
                 </CardContent>
@@ -231,11 +259,11 @@ const Cashbox = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <History className="h-5 w-5" />
-                  Transaction History - {format(new Date(selectedDate), 'MMMM d, yyyy')}
+                  Transaction History - {format(new Date(range?.from || selectedDate), 'MMMM d, yyyy')}-{format(new Date(range?.to || selectedDate), 'MMMM d, yyyy')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <TransactionHistoryTable date={selectedDate} />
+                <TransactionHistoryTable date={range} type={transactionType == "All" ? null : transactionType} search={search} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -251,23 +279,27 @@ const Cashbox = () => {
       <CashboxTransactionDialog
         open={addCapitalOpen}
         onOpenChange={setAddCapitalOpen}
-        date={selectedDate}
+        date={range}
+        // date={selectedDate}
         type="in"
       />
       <CashboxTransactionDialog
         open={withdrawCapitalOpen}
         onOpenChange={setWithdrawCapitalOpen}
-        date={selectedDate}
+        date={range}
+        // date={selectedDate}
         type="out"
       />
       <GiveDriverCashDialog
         open={giveDriverCashOpen}
         onOpenChange={setGiveDriverCashOpen}
-        date={selectedDate}
+        date={range}
+      // date={selectedDate}
       />
       <AddExpenseDialog
         open={addExpenseOpen}
         onOpenChange={setAddExpenseOpen}
+        // date={range}
         date={selectedDate}
       />
     </Layout>
