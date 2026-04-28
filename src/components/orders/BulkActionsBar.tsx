@@ -192,7 +192,9 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
           }
 
           const order = orders.find(o => o.id === orderId);
-          if (orders.length > 0 && !order.company_paid_for_order /* && !order.prepaid_by_runners */) {
+          if (order.third_party_id) {
+          }
+          if (orders.length > 0 && !order.company_paid_for_order && !order.third_party_id /* && !order.prepaid_by_runners */) {
             const { error: walletError } = await (supabase.rpc as any)('update_driver_wallet_atomic', {
               p_driver_id: order.driver_id,
               p_amount_usd: order?.driver_paid_for_client ? (order.driver_paid_amount_usd * -1) : order.order_amount_usd + order.delivery_fee_usd,

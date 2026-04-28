@@ -70,7 +70,7 @@ export function ThirdPartyStatementsTab() {
         .select(`*, clients(name), drivers(name), customers(phone, name, address)`)
         .eq('third_party_id', selectedThirdParty)
         .eq('fulfillment', 'ThirdParty')
-        .eq('status', 'Delivered')
+        .in('status', ['Delivered', "DriverCollected"])
         .gte('created_at', dateFrom)
         .lte('created_at', dateTo + 'T23:59:59')
         .order('created_at', { ascending: false });
@@ -142,7 +142,7 @@ export function ThirdPartyStatementsTab() {
     return selectedOrdersData.reduce((acc, order) => {
       const orderValue = Number(order.order_amount_usd || 0);
       const thirdPartyFee = Number(order.third_party_fee_usd || 0);
-      const expectedRemit = orderValue - thirdPartyFee;
+      const expectedRemit = orderValue + Number(order.delivery_fee_usd || 0) - thirdPartyFee;
 
       return {
         totalOrders: acc.totalOrders + 1,
@@ -163,7 +163,7 @@ export function ThirdPartyStatementsTab() {
 
   // Calculate overall stats for all pending orders (what they owe us)
   const allPendingOrdersTotal = (orders?.filter(o => !receivedOrderIds.has(o.id)) || [])
-    .reduce((sum, o) => sum + Number(o.order_amount_usd || 0) - Number(o.third_party_fee_usd || 0), 0);
+    .reduce((sum, o) => sum + Number(o.order_amount_usd || 0) + Number(o.delivery_fee_usd || 0) - Number(o.third_party_fee_usd || 0), 0);
 
   // Get all remittance transactions (IN = received from 3P, OUT = paid to 3P)
   const remittanceIn = orderTransactions?.filter(tx => tx.direction === 'IN') || [];
@@ -614,7 +614,7 @@ export function ThirdPartyStatementsTab() {
                       <TableBody>
                         {pendingOrders.map((order) => {
                           const orderRef = order.order_type === 'ecom' ? (order.voucher_no || order.order_id) : order.order_id;
-                          const orderValue = Number(order.order_amount_usd || 0);
+                          const orderValue = Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0);
                           const thirdPartyFee = Number(order.third_party_fee_usd || 0);
                           const expectedRemit = orderValue - thirdPartyFee;
 
@@ -677,7 +677,8 @@ export function ThirdPartyStatementsTab() {
                   <TableBody>
                     {receivedOrders.map((order) => {
                       const orderRef = order.order_type === 'ecom' ? (order.voucher_no || order.order_id) : order.order_id;
-                      const orderValue = Number(order.order_amount_usd || 0);
+                      // const orderValue = Number(order.order_amount_usd || 0);
+                      const orderValue = Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0);
                       const thirdPartyFee = Number(order.third_party_fee_usd || 0);
                       const expectedRemit = orderValue - thirdPartyFee;
 
