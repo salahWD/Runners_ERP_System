@@ -153,7 +153,7 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
         // if (status === 'Delivered') {
         const { data: ordersData } = await supabase
           .from("orders")
-          .select("id, order_id, driver_id, third_party_id, fulfillment, company_paid_for_order, prepaid_by_runners, driver_paid_for_client, order_amount_usd, delivery_fee_usd, order_amount_lbp, delivery_fee_lbp")
+          .select("id, order_id, driver_id, third_party_id, fulfillment, company_paid_for_order, prepaid_by_runners, driver_paid_for_client, order_amount_usd, driver_paid_amount_usd, driver_paid_amount_lbp, delivery_fee_usd, order_amount_lbp, delivery_fee_lbp")
           .in("id", selectedIds);
         orders = ordersData;
         const ordersWithoutAssignment = ordersData?.filter(order =>
@@ -195,6 +195,15 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
           if (order.third_party_id) {
           }
           if (orders.length > 0 && !order.company_paid_for_order && !order.third_party_id /* && !order.prepaid_by_runners */) {
+            console.log(`Updating driver wallet for order ${order.id}...`);
+            console.log(order.driver_id);
+            console.log(order?.driver_paid_for_client);
+            console.log(order.driver_paid_amount_usd);
+            console.log({
+              p_driver_id: order.driver_id,
+              p_amount_usd: order?.driver_paid_for_client ? (order.driver_paid_amount_usd * -1) : order.order_amount_usd + order.delivery_fee_usd,
+              p_amount_lbp: order?.driver_paid_for_client ? (order.driver_paid_amount_lbp * -1) : order.order_amount_lbp + order.delivery_fee_lbp,
+            });
             const { error: walletError } = await (supabase.rpc as any)('update_driver_wallet_atomic', {
               p_driver_id: order.driver_id,
               p_amount_usd: order?.driver_paid_for_client ? (order.driver_paid_amount_usd * -1) : order.order_amount_usd + order.delivery_fee_usd,

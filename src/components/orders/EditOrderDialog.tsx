@@ -556,7 +556,7 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                       <SelectItem value="Assigned">Assigned</SelectItem>
                       <SelectItem value="PickedUp">Picked Up</SelectItem>
                       {/* <SelectItem value="Delivered">Delivered</SelectItem> */}
-                      <SelectItem value="DriverCollected">Delivered - Driver Collected</SelectItem>
+                      <SelectItem value="DriverCollected">Delivered</SelectItem>
                       {/* <SelectItem value="CustomerCollected">Delivered - Customer Collected</SelectItem> */}
                       {/* <SelectItem value="PaidDueByDriver">Delivered - Paid Due By Driver</SelectItem> */}
                       <SelectItem value="Returned">Returned</SelectItem>
