@@ -9,7 +9,7 @@ import { DateRange } from "react-day-picker";
 
 interface TransactionHistoryTableProps {
   date: DateRange;
-  type: string | null;
+  type: string[] | null;
   search: string | null
 }
 
@@ -129,8 +129,8 @@ export default function TransactionHistoryTable({ date, type = null, search = nu
       time: t.ts,
       type: "Cashbox " + t.type,
       description: t.note || t.type,
-      amountUSD: t.type === 'IN' ? Number(t.amount_usd || 0) : -Number(t.amount_usd || 0),
-      amountLBP: t.type === 'IN' ? Number(t.amount_lbp || 0) : -Number(t.amount_lbp || 0),
+      amountUSD: t.type === 'IN' ? Number(t.amount_usd || 0) : -Math.abs(Number(t.amount_usd || 0)),
+      amountLBP: t.type === 'IN' ? Number(t.amount_lbp || 0) : -Math.abs(Number(t.amount_lbp || 0)),
       category: 'cashbox',
       orderRef: t.order_ref,
     })) || []),
@@ -145,7 +145,7 @@ export default function TransactionHistoryTable({ date, type = null, search = nu
       orderRef: null,
     })) || []),
   ].filter(item => {
-    if (type && type !== 'All' && item.category !== type) {
+    if (type && !type.includes('All') && !type.includes(item.category)) {
       return false;
     }
     if (search && !item.description.includes(search)) {

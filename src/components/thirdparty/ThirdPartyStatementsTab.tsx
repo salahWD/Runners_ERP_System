@@ -190,7 +190,7 @@ export function ThirdPartyStatementsTab() {
         party_type: 'THIRD_PARTY' as const,
         party_id: selectedThirdParty,
         direction: 'IN' as const,
-        amount_usd: Number(order.order_amount_usd || 0) - Number(order.third_party_fee_usd || 0),
+        amount_usd: Number(order.order_amount_usd || 0) + Number(order.delivery_fee_usd || 0) - Number(order.third_party_fee_usd || 0),
         tx_type: 'THIRD_PARTY_REMITTANCE' as const,
         tx_date: new Date().toISOString(),
         recorded_by: user?.id,

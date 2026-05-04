@@ -86,8 +86,8 @@ export function ClientStatementPreview({
 
   const formatAmount = (usd: number, lbp: number) => {
     const parts = [];
-    if (usd > 0) parts.push(`$${usd.toFixed(2)}`);
-    if (lbp > 0) parts.push(`${lbp.toLocaleString()} LL`);
+    parts.push(`$${usd.toFixed(2)}`);
+    parts.push(`${lbp.toLocaleString()} LL`);
     return parts.length > 0 ? parts.join(' / ') : '-';
   };
 

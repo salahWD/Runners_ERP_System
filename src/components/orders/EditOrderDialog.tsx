@@ -514,26 +514,48 @@ export default function EditOrderDialog({ order, open, onOpenChange }: EditOrder
                     </div>
                   </>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Order Amount (USD)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.order_amount_usd}
-                        onChange={(e) => setFormData({ ...formData, order_amount_usd: e.target.value })}
-                      />
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Order Amount (USD)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.order_amount_usd}
+                          onChange={(e) => setFormData({ ...formData, order_amount_usd: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Delivery Fee (USD)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.delivery_fee_usd}
+                          onChange={(e) => setFormData({ ...formData, delivery_fee_usd: e.target.value })}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Delivery Fee (USD)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.delivery_fee_usd}
-                        onChange={(e) => setFormData({ ...formData, delivery_fee_usd: e.target.value })}
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Order Amount (LBP)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.order_amount_lbp}
+                          onChange={(e) => setFormData({ ...formData, order_amount_lbp: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Delivery Fee (LBP)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.delivery_fee_lbp}
+                          onChange={(e) => setFormData({ ...formData, delivery_fee_lbp: e.target.value })}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
                 <div className="space-y-2">

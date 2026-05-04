@@ -145,10 +145,9 @@ export function DriverStatementsTab() {
     );
   };
 
-  const calculateTotals = () => {
-    const selectedOrdersData = orders?.filter(o => selectedOrders.includes(o.id)) || [];
+  const calculateTotals = (orders) => {
 
-    return selectedOrdersData.reduce((acc, order) => {
+    return orders.reduce((acc, order) => {
       const isDriverPaid = order.driver_paid_for_client === true;
       const isCompanyPaid = order.company_paid_for_order === true;
 
@@ -182,7 +181,8 @@ export function DriverStatementsTab() {
     });
   };
 
-  const totals = calculateTotals();
+  const selectedOrdersData = orders?.filter(o => selectedOrders.includes(o.id)) || [];
+  const totals = calculateTotals(selectedOrdersData);
   // Net due FROM driver = what driver collected MINUS what we owe driver (refunds)
   // If negative, we owe the driver money (cash out from cashbox)
   const netDueUsd = totals.totalCollectedUsd - totals.totalDriverPaidUsd;
@@ -224,82 +224,14 @@ export function DriverStatementsTab() {
         net_due_usd: netDueUsd,
         net_due_lbp: netDueLbp,
         order_refs: orderRefs,
-        status: 'paid',
+        // status: 'paid',
+        status: 'unpaid',
         paid_date: new Date().toISOString(),
         payment_method: 'cash',
         created_by: user?.id,
       });
 
       if (insertError) throw insertError;
-
-      // Batch update all orders
-      const orderIds = selectedOrdersData.map(o => o.id);
-      await supabase.from('orders').update({
-        driver_remit_status: 'Collected',
-        driver_remit_date: new Date().toISOString(),
-      }).in('id', orderIds);
-
-      // Use atomic cashbox update
-      // If netDue is positive: driver owes us money (cash in)
-      // If netDue is negative: we owe driver money (cash out)
-      const today = new Date().toISOString().split('T')[0];
-      const cashInUsd = netDueUsd > 0 ? netDueUsd : 0;
-      const cashInLbp = netDueLbp > 0 ? netDueLbp : 0;
-      const cashOutUsd = netDueUsd < 0 ? Math.abs(netDueUsd) : 0;
-      const cashOutLbp = netDueLbp < 0 ? Math.abs(netDueLbp) : 0;
-
-      const { error: cashboxError } = await (supabase.rpc as any)('update_cashbox_atomic', {
-        p_date: today,
-        p_cash_in_usd: cashInUsd,
-        p_cash_in_lbp: cashInLbp,
-        p_cash_out_usd: cashOutUsd,
-        p_cash_out_lbp: cashOutLbp,
-      });
-
-      if (cashboxError) throw cashboxError;
-
-      const { error: cashboxTransactionError } = await (supabase.rpc as any)('add_cashbox_transaction', {
-        transaction_type: (cashInUsd - cashOutUsd) + (cashInLbp - cashOutLbp) > 0 ? "IN" : "OUT",
-        amount_usd: (cashInUsd - cashOutUsd).toString(),
-        amount_lbp: (cashInLbp - cashOutLbp).toString(),
-        note: `Statement ${statementIdData} issued for driver ${drivers?.find(d => d.id === selectedDriver)?.name || selectedDriver}. Net due: $${netDueUsd.toFixed(2)} and ${netDueLbp.toLocaleString()} LL. Orders: ${orderRefs.join(', ')}.`,
-        order_ref: statementIdData,
-        driver_id: selectedDriver,
-        client_id: null,
-        third_party_id: null,
-      });
-
-      if (cashboxTransactionError) throw cashboxTransactionError;
-      // Use atomic wallet update
-      // This zeros out the driver's wallet by subtracting what we collected and adding back refunds
-      const { error: walletError } = await (supabase.rpc as any)('update_driver_wallet_atomic', {
-        p_driver_id: selectedDriver,
-        p_amount_usd: -netDueUsd,
-        p_amount_lbp: -netDueLbp,
-      });
-
-      if (walletError) throw walletError;
-
-      // Create transaction record(s)
-      if (totals.totalCollectedUsd > 0 || totals.totalCollectedLbp > 0) {
-        await supabase.from('driver_transactions').insert({
-          driver_id: selectedDriver,
-          type: 'Debit',
-          amount_usd: totals.totalCollectedUsd,
-          amount_lbp: totals.totalCollectedLbp,
-          note: `Statement ${statementIdData} - Cash Collected`,
-        });
-      }
-
-      if (totals.totalDriverPaidUsd > 0 || totals.totalDriverPaidLbp > 0) {
-        await supabase.from('driver_transactions').insert({
-          driver_id: selectedDriver,
-          type: 'Credit',
-          amount_usd: totals.totalDriverPaidUsd,
-          amount_lbp: totals.totalDriverPaidLbp,
-          note: `Statement ${statementIdData} - Refund for amounts paid`,
-        });
-      }
 
       return statementIdData;
     },
@@ -329,10 +261,130 @@ export function DriverStatementsTab() {
         payment_method: paymentMethod,
         notes: paymentNotes || null,
       }).eq('id', selectedStatement.id);
+
+      if (selectedStatement) {
+        if (selectedStatement.order_refs?.length) {
+          const { data: orders } = await supabase
+            .from('orders')
+            .select('id, order_id, voucher_no, driver_paid_amount_usd, driver_paid_amount_lbp, driver_paid_for_client, company_paid_for_order, driver_id, collected_amount_usd, collected_amount_lbp, driver_paid_reason')
+            .or(selectedStatement.order_refs.map((ref: string) => `order_id.eq.${ref},voucher_no.eq.${ref}`).join(','));
+
+          if (orders?.length) {
+            console.log("orders: ", orders);
+            console.log("selectedOrdersData: ", orders);
+            // Batch update all orders
+            const orderIds = orders.map(o => o.id);
+            await supabase.from('orders').update({
+              driver_remit_status: 'Collected',
+              driver_remit_date: new Date().toISOString(),
+            }).in('id', orderIds);
+
+
+            const totals = calculateTotals(orders);
+            // Net due FROM driver = what driver collected MINUS what we owe driver (refunds)
+            // If negative, we owe the driver money (cash out from cashbox)
+            const netDueUsd = totals.totalCollectedUsd - totals.totalDriverPaidUsd;
+            const netDueLbp = totals.totalCollectedLbp - totals.totalDriverPaidLbp;
+
+            // Use atomic cashbox update
+            // If netDue is positive: driver owes us money (cash in)
+            // If netDue is negative: we owe driver money (cash out)
+            const today = new Date().toISOString().split('T')[0];
+            const cashInUsd = netDueUsd > 0 ? netDueUsd : 0;
+            const cashInLbp = netDueLbp > 0 ? netDueLbp : 0;
+            const cashOutUsd = netDueUsd < 0 ? Math.abs(netDueUsd) : 0;
+            const cashOutLbp = netDueLbp < 0 ? Math.abs(netDueLbp) : 0;
+
+            const { error: cashboxError } = await (supabase.rpc as any)('update_cashbox_atomic', {
+              p_date: today,
+              p_cash_in_usd: cashInUsd,
+              p_cash_in_lbp: cashInLbp,
+              p_cash_out_usd: cashOutUsd,
+              p_cash_out_lbp: cashOutLbp,
+            });
+
+            if (cashboxError) {
+              console.log(cashboxError);
+              throw cashboxError;
+            } else {
+              console.log("cashbox ", {
+                p_date: today,
+                p_cash_in_usd: cashInUsd,
+                p_cash_in_lbp: cashInLbp,
+                p_cash_out_usd: cashOutUsd,
+                p_cash_out_lbp: cashOutLbp,
+              })
+            };
+
+            const { error: cashboxTransactionError } = await (supabase.rpc as any)('add_cashbox_transaction', {
+              transaction_type: (cashInUsd - cashOutUsd) + (cashInLbp - cashOutLbp) > 0 ? "IN" : "OUT",
+              amount_usd: (cashInUsd - cashOutUsd).toString(),
+              amount_lbp: (cashInLbp - cashOutLbp).toString(),
+              note: `Statement ${selectedStatement.statement_id} issued for driver ${drivers?.find(d => d.id === selectedDriver)?.name || selectedDriver}. Net due: $${netDueUsd.toFixed(2)} and ${netDueLbp.toLocaleString()} LL. Orders: ${selectedStatement.order_refs.join(', ')}.`,
+              order_ref: selectedStatement.statement_id,
+              driver_id: selectedDriver,
+              client_id: null,
+              third_party_id: null,
+            });
+
+            if (cashboxTransactionError) {
+              console.log(cashboxTransactionError);
+              throw cashboxTransactionError;
+            } else {
+              console.log("Cashbox transaction recorded successfully");
+            }
+            // Use atomic wallet update
+            // This zeros out the driver's wallet by subtracting what we collected and adding back refunds
+            const { error: walletError } = await (supabase.rpc as any)('update_driver_wallet_atomic', {
+              p_driver_id: selectedDriver,
+              p_amount_usd: -netDueUsd,
+              p_amount_lbp: -netDueLbp,
+            });
+
+            if (walletError) {
+              console.log(walletError);
+              throw walletError;
+            } else {
+              console.log("Driver wallet updated successfully");
+            }
+
+            // Create transaction record(s)
+
+            console.log("totals :", totals);
+            if (totals.totalCollectedUsd > 0 || totals.totalCollectedLbp > 0) {
+              await supabase.from('driver_transactions').insert({
+                driver_id: selectedDriver,
+                type: 'Debit',
+                amount_usd: totals.totalCollectedUsd,
+                amount_lbp: totals.totalCollectedLbp,
+                note: `Statement ${selectedStatement.id} - Cash Collected`,
+              });
+            }
+
+            if (totals.totalDriverPaidUsd > 0 || totals.totalDriverPaidLbp > 0) {
+              await supabase.from('driver_transactions').insert({
+                driver_id: selectedDriver,
+                type: 'Credit',
+                amount_usd: totals.totalDriverPaidUsd,
+                amount_lbp: totals.totalDriverPaidLbp,
+                note: `Statement ${selectedStatement.id} - Refund for amounts paid`,
+              });
+            }
+
+          }
+
+        }
+      }
+
     },
     onSuccess: () => {
       toast.success('Statement marked as paid');
       queryClient.invalidateQueries({ queryKey: ['driver-statements-history'] });
+      queryClient.invalidateQueries({ queryKey: ['drivers'] });
+      queryClient.invalidateQueries({ queryKey: ['drivers-for-statement'] });
+      queryClient.invalidateQueries({ queryKey: ['cashbox'] });
+      queryClient.invalidateQueries({ queryKey: ['driver-transactions'] });
+      setSelectedOrders([]);
       setPaymentDialogOpen(false);
       setSelectedStatement(null);
       setPaymentMethod('cash');
@@ -521,6 +573,7 @@ export function DriverStatementsTab() {
                           <TableHead className="py-2">Date</TableHead>
                           <TableHead className="py-2">Order</TableHead>
                           <TableHead className="py-2">Client</TableHead>
+                          <TableHead className="py-2">Notes</TableHead>
                           <TableHead className="py-2 text-right">Collected (incl. Fee)</TableHead>
                           <TableHead className="py-2 text-right">Refund to Driver</TableHead>
                         </TableRow>
@@ -539,6 +592,7 @@ export function DriverStatementsTab() {
                             </TableCell>
                             <TableCell className="py-1 font-mono">{order.order_id}</TableCell>
                             <TableCell className="py-1">{order.clients?.name}</TableCell>
+                            <TableCell className="py-1">{order.notes}</TableCell>
                             <TableCell className="py-1 text-right font-mono">
                               {Number(order.collected_amount_usd || 0) > 0 || Number(order.collected_amount_lbp || 0) > 0 ? (
                                 <div>
@@ -935,7 +989,7 @@ export function DriverStatementsTab() {
                 disabled={issueStatementMutation.isPending}
               >
                 <CheckCircle className="mr-1.5 h-4 w-4" />
-                {issueStatementMutation.isPending ? 'Processing...' : 'Issue & Collect Payment'}
+                {issueStatementMutation.isPending ? 'Processing...' : 'Issue statment'}
               </Button>
             </DialogFooter>
           </DialogContent>

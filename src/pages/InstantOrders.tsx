@@ -57,7 +57,7 @@ const getPaymentStatus = (order: Order) => {
   // Driver paid for client - client owes us
   if (order.driver_paid_for_client) {
     if (order.driver_remit_status === 'Collected') {
-      return { label: "Settled", variant: "default" as const, className: "bg-green-600" };
+      return { label: "D-Settled", variant: "default" as const, className: "bg-green-600" };
     }
     return { label: "Due", variant: "destructive" as const };
   }
@@ -65,7 +65,7 @@ const getPaymentStatus = (order: Order) => {
   // Company paid for order - customer owes us (same logic as driver-paid)
   if ((order as any).company_paid_for_order) {
     if (order.driver_remit_status === 'Collected') {
-      return { label: "Settled", variant: "default" as const, className: "bg-green-600" };
+      return { label: "D-Settled", variant: "default" as const, className: "bg-green-600" };
     }
     return { label: "Due", variant: "destructive" as const };
   }
@@ -219,7 +219,7 @@ const InstantOrders = () => {
 
         <InstantOrderForm />
 
-        <Card>
+        <Card className="!mb-20">
           <CardContent className="p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">All Instant Orders</h3>
@@ -251,8 +251,8 @@ const InstantOrders = () => {
                   <TableHead>Address</TableHead>
                   <TableHead>Amount USD</TableHead>
                   <TableHead>Amount LBP</TableHead>
-                  <TableHead>Delivery USD</TableHead>
-                  <TableHead>Delivery LBP</TableHead>
+                  <TableHead>Fee USD</TableHead>
+                  <TableHead>Fee LBP</TableHead>
                   <TableHead>Order Status</TableHead>
                   <TableHead>Payment Status</TableHead>
                   <TableHead>Notes</TableHead>

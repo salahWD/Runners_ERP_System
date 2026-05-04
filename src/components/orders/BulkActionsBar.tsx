@@ -356,8 +356,10 @@ export function BulkActionsBar({ selectedIds, onClearSelection }: BulkActionsBar
                     <CommandItem
                       key={status}
                       onSelect={() => {
-                        updateStatusMutation.mutate(status);
-                        setStatusOpen(false);
+                        if (statusOpen) {
+                          updateStatusMutation.mutate(status);
+                          setStatusOpen(false);
+                        }
                       }}
                     >
                       {status == "DriverCollected" ? "Delivered" : status}

@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Minus, HandCoins, Receipt, History, Wallet, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Minus, HandCoins, Receipt, History, Wallet, Calendar, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CashboxTransactionDialog from '@/components/cashbox/CashboxTransactionDialog';
@@ -18,7 +18,7 @@ import { format, addDays, subDays } from 'date-fns';
 import { Calendar as Cal } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu';
 
 
 const Cashbox = () => {
@@ -30,8 +30,27 @@ const Cashbox = () => {
   const [activeTab, setActiveTab] = useState('daily');
 
   const [range, setRange] = useState<DateRange | undefined>(undefined);
-  const [transactionType, setTransactionType] = useState<string>("All");
+  const [transactionType, setTransactionType] = useState<string[]>(['All']);
   const [search, setSearch] = useState<string>("");
+
+  const transactionTypeLabel = transactionType.includes('All')
+    ? 'All'
+    : transactionType.map(type => type.charAt(0).toUpperCase() + type.slice(1)).join(', ');
+
+  const toggleTransactionType = (value: string) => {
+    if (value === 'All') {
+      setTransactionType(['All']);
+      return;
+    }
+
+    setTransactionType((current) => {
+      const selected = current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current.filter((item) => item !== 'All'), value];
+
+      return selected.length ? selected : ['All'];
+    });
+  };
 
   const goToToday = () => {
     setSelectedDate(new Date().toISOString().split('T')[0]);
@@ -178,16 +197,34 @@ const Cashbox = () => {
                 Today
               </Button>
               <div className="space-y-2">
-                <Select value={transactionType} onValueChange={setTransactionType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    <SelectItem value="All">All</SelectItem>
-                    <SelectItem value="driver">Driver</SelectItem>
-                    <SelectItem value="expense">Expense</SelectItem>
-                    <SelectItem value="cashbox">Cashbox</SelectItem>
-                    <SelectItem value="accounting">Accounting</SelectItem>
-                  </SelectContent>
-                </Select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between">
+                      <span>{transactionTypeLabel}</span>
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="bg-popover">
+                    <DropdownMenuCheckboxItem checked={transactionType.includes('All')} onCheckedChange={() => toggleTransactionType('All')}>
+                      All
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={transactionType.includes('driver')} onCheckedChange={() => toggleTransactionType('driver')}>
+                      Driver
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={transactionType.includes('client')} onCheckedChange={() => toggleTransactionType('client')}>
+                      Client
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={transactionType.includes('expense')} onCheckedChange={() => toggleTransactionType('expense')}>
+                      Expense
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={transactionType.includes('cashbox')} onCheckedChange={() => toggleTransactionType('cashbox')}>
+                      Cashbox
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={transactionType.includes('accounting')} onCheckedChange={() => toggleTransactionType('accounting')}>
+                      Accounting
+                    </DropdownMenuCheckboxItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               <div className="space-y-2">
                 <Input placeholder="Search transactions..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -264,7 +301,7 @@ const Cashbox = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <TransactionHistoryTable date={range} type={transactionType == "All" ? null : transactionType} search={search} />
+                <TransactionHistoryTable date={range} type={transactionType.includes('All') ? null : transactionType} search={search} />
               </CardContent>
             </Card>
           </TabsContent>
